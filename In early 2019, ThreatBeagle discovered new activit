@@ -1,0 +1,69 @@
+In early 2019, ThreatBeagle discovered new activity from a known group called FIZ7, and was able to gather enough information from several organizations that were targeted by this group. Several intrusions associated with FIZ7 described compromises of companies within the food and beverage industry around the world, specifically the cutting edge biohacking drink industry.
+
+Intelligence from recent FIZ7 incidents indicates that phishing attacks have been the main method of initial compromise. After gaining access to a user’s system, attackers maintain persistence via multiple mechanisms to ensure continued access. FIZ7 performs internal reconnaissance by gathering a listing of local system or domain users, elevates privileges with valid accounts or system misconfigurations, dumps credentials, moves laterally throughout the environment with valid credentials, and finally moves towards their intended target to collect and exfiltrate intellectual property. FIZ7 is financially motivated and it is known that this group sells valuable and very expensive stolen secrets on the dark web.
+
+Anatomy of the Attack
+FIZ7 most frequently utilizes phishing emails to perform initial execution of code in their targets. Emails are often delivered from a domain named similarly to the target environment with specific instructions for payload execution. They recently have been using trusted Windows utilities such as mshta.exe to proxy execute malicious code embedded in Microsoft HTML Applications (HTA) files. The common delivery mechanism that this group likes to use is a link to a malicious .hta file hosted on high-trust cloud-hosted domains such as Amazon or to deliver the payload directly in an email attachment. External communication with cloud-hosted infrastructure has been allowed in most of the organizations that were targeted by this group allowing them to evade network detections. One of the phishing payloads recovered from a recent incident was named updated_recipe.hta and contained the following:
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
+    <title>Windows Defender Web Install</title>
+    <script language="VBScript">
+    set oShell = CreateObject("Wscript.Shell")
+    oShell.Run("powershell.exe -WindowStyle hidden -nologo -noprofile -e xxxxxxxx"),0,true
+    self.close()
+    </script>
+    <hta:application
+    id="oHTA"
+    applicationname="Windows Defender Web Install"
+    application="yes"
+    >
+    </hta:application>
+    </head>
+    <div>
+    <object type="text/html" data="http://windows.microsoft.com/en-IN/windows7/products/features/windows-defender" width="100%" height="100%">
+    </object></div>  
+    <body>
+    </body>
+</html>
+The malware used by the attackers has been observed using PowerShell to spawn a copy of svchost.exe, get a handle to the new process, allocate memory, write shellcode in the allocated memory, and execute the code on the target process. This process has been effective at evading a large number of in place defensive solutions.
+
+Once the victim executes the phishing payload, the compromised system connects back to the attacker’s C2 and persistence is quickly established on the user’s machine. The two most common methods identified leverage Scheduled Tasks and adding an entry to the “Run keys” in the system’s registry. Both persistence methods are designed to call back to a second C2 server.
+
+Once an initial foothold and persistence have been established, FIZ7 typically will begin internal reconnaissance to enumerate domain accounts with access to other systems of interest, and open file shares to gain access to potential confidential information. The use of net.exe has been identified as one of the Windows utilities that the group likes to use to gather information about domain users and mount file shares.
+
+A few command-arguments that were found in Windows Event Logs demonstrates how net.exe has been used by this group in the past:
+
+net user xxxx /domain
+net use Z: \\.......
+net group "Domain Admins" /domain
+FIZ7 usually looks for common privilege escalation misconfigurations that can be used to initiate elevated connections and perform further activities that require administrative privileges. This was determined after finding evidence of a PowerShell tool named “PowerUp” in PowerShell logs on some infected systems where PowerShell logging was enabled.
+
+Unfortunately, many of the users who have been compromised by this group were also local administrators on the compromised system. In such cases, FIZ7 was able to obtain elevated system access through bypassing User Account Control (UAC). FIZ7 frequently uses a fileless technique which leverages eventvwr.exe and the system registry. This group has used a custom PowerShell script that creates a registry entry in the current user’s hive (HKCU\Software\Classes\mscfile\shell\open\command), sets the default value to a PowerShell encoded command, runs eventvwr.exe, then deletes the registry entry. This allows FIZ7 to elevate to a high integrity process and continue their operations.
+
+FIZ7 has been observed using Mimikatz to dump credentials following successful privilege escalation on local systems. Many of the organizations compromised by FIZ7 disabled the storage of the user’s logon credential in clear text, only allowing for hashes to be obtained rather than plaintext passwords. However, according to Windows Event logs monitoring for registry modifications, updating the registry value of HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest\UseLogonCredential to 1 would allow FIZ7 to obtain clear text passwords. In a several cases, hashes were sufficient for the threat group and were used for lateral movement. FIZ7 has also leveraged token theft in order to perform desired actions on an endpoint. Finally, FIZ7 has been known to leverage Mimikatz to abuse Kerberos in order to further access in the environment, though specific details are unavailable at this time.
+
+One of the preferred methods for lateral movement used by this group involves leveraging WMI to start remote processes in order to obtain execution on remote systems. In addition, FIZ7 has been observed using remote service creation, similar to PSExec, for lateral movement. FIZ7 continues to move laterally through the network until they discover proprietary company information, often on Research and Development systems. FIZ7 will often leverage keyloggers and screen capture tools to gather additional information from compromised systems. Their typical C2 mechanism is HTTP or HTTPS requests to a FIZ7 owned address. This C2 activity frequently exhibits “beaconing” type behavior with requests for new commands happening at a specific interval. This activity typically increases during active operations and is greatly reduced during periods of inactivity. Data exfiltration occurs over the same mechanism as C2.
+
+IOC’s
+Hashes
+
+986326022C1BA18793330C210887E3B0
+B7533C9F42DAEB81E6D256094691F7BF
+AF88229DAC124CEEFDFECA758C6C9539
+FD9399424DCAF648D748632116346341
+1FD4558189A870B123F8CF54693F0095
+27304B246C7D5B4E149124D5F93C5B01
+9321C107D1F7E336CDA550A2BF049108
+FF59EF73460173ABDB10EDE1A0BC9CE6
+8F928AF9C3A8CE4244556AAF3AE31B10
+Domains
+
+Beverageresearchers.com
+SodaSupplyShop.com
+BiohackingBeverages.com
+UltimateEnergyDrinks.com
+BiohackingInternational.com
+axfnahdfislakdnfiaoasdfazdlfkasdfsodf.com
